@@ -21,6 +21,14 @@ public class GlobalExceptionHandler {
         return response(request.getRequestURI(), exp.getMessage(),HttpStatus.NOT_FOUND,null);
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiError> handleBadRequestException(
+            BadRequestException exp,
+            HttpServletRequest request
+    ) {
+        return response(request.getRequestURI(), exp.getMessage(),HttpStatus.BAD_REQUEST,null);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiError> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exp,

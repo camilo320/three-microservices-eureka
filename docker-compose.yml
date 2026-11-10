@@ -1,0 +1,176 @@
+name: three-microservices-eureka
+
+x-common-env: &common-env
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eureka123}@eureka:8761/eureka/
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+  JWT_SECRET: ${JWT_SECRET:-three-microservices-eureka-jwt-secret-key-2026-change-me-in-production}
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SPRING_JPA_SHOW_SQL: "false"
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: three-microservices-eureka/app:local
+  restart: unless-stopped
+  networks:
+    - transporte
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - transporte
+
+services:
+  eureka:
+    <<: *app
+    command: ["/app/server.jar"]
+    ports:
+      - "8761:8761"
+    environment:
+      EUREKA_USER: ${EUREKA_USER:-eureka}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:-eureka123}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eureka123}@eureka:8761/eureka/
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null "http://${EUREKA_USER:-eureka}:${EUREKA_PASSWORD:-eureka123}@localhost:8761/eureka/apps" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  postgres:
+    <<: *service-defaults
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-transporte}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-transporte123}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-transporte} -d postgres
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  ms-auth:
+    <<: *app
+    command: ["/app/ms-auth.jar"]
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-transporte}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-transporte123}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:8084/actuator/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  ms-orden:
+    <<: *app
+    command: ["/app/ms-orden.jar"]
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ordendb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-transporte}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-transporte123}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:8081/actuator/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  ms-driver:
+    <<: *app
+    command: ["/app/ms-driver.jar"]
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/driverdb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-transporte}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-transporte123}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:8082/actuator/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  ms-asignacion:
+    <<: *app
+    command: ["/app/ms-asignacion.jar"]
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      ms-orden:
+        condition: service_healthy
+      ms-driver:
+        condition: service_healthy
+    environment:
+      <<: *common-env
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/asignaciondb
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-transporte}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-transporte123}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      UPLOADS_PATH: /app/uploads
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://localhost:8083/actuator/health || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    volumes:
+      - asignacion-uploads:/app/uploads
+
+volumes:
+  postgres-data:
+  asignacion-uploads:
+
+networks:
+  transporte:
+    driver: bridge

@@ -18,8 +18,9 @@
     <modules>
         <module>ms-orden</module>
         <module>ms-driver</module>
-        <module>server</module>
         <module>ms-asignacion</module>
+        <module>ms-auth</module>
+        <module>server</module>
     </modules>
 
     <properties>

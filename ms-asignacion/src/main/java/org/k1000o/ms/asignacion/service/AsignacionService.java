@@ -1,10 +1,10 @@
 package org.k1000o.ms.asignacion.service;
 
-import jakarta.ws.rs.BadRequestException;
 import lombok.AllArgsConstructor;
 import org.k1000o.ms.asignacion.config.FileProperties;
 import org.k1000o.ms.asignacion.dto.*;
 import org.k1000o.ms.asignacion.entity.Asignacion;
+import org.k1000o.ms.asignacion.exception.BadRequestException;
 import org.k1000o.ms.asignacion.exception.ResourceNotFoundException;
 import org.k1000o.ms.asignacion.feign.DriverFeign;
 import org.k1000o.ms.asignacion.feign.OrdenFeign;
